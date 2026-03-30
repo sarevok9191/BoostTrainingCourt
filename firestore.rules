@@ -1,0 +1,148 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn()  { return request.auth != null; }
+    function uid()         { return request.auth.uid; }
+
+    function callerDoc() {
+      return get(/databases/$(database)/documents/users/$(uid())).data;
+    }
+    function callerRole() { return callerDoc().role; }
+
+    function isSuperAdmin() { return isSignedIn() && callerRole() == "superadmin"; }
+    function isTrainer()    { return isSignedIn() && callerRole() == "trainer"; }
+    function isTrainee()    { return isSignedIn() && callerRole() == "trainee"; }
+
+    // ── /users/{uid} ──────────────────────────────────────────────
+    match /users/{userId} {
+      // Trainees read only themselves; trainers + superadmin read all
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || isTrainer()
+        || uid() == userId
+      );
+
+      // Self-registration (seed) OR superadmin OR trainer creating their trainee
+      allow create: if isSignedIn() && (
+        uid() == userId
+        || isSuperAdmin()
+        || (isTrainer()
+            && request.resource.data.role     == "trainee"
+            && request.resource.data.trainerId == uid())
+      );
+
+      // Superadmin can change anything; trainer can only touch certain trainee fields
+      allow update: if isSuperAdmin()
+        || (isTrainer()
+            && resource.data.trainerId == uid()
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly(['credits', 'declaredPassword', 'fcmToken']));
+
+      // Superadmin or trainer deletes their own trainee
+      allow delete: if isSuperAdmin()
+        || (isTrainer()
+            && resource.data.role      == "trainee"
+            && resource.data.trainerId == uid());
+    }
+
+    // ── /sessions/{sessionId} ─────────────────────────────────────
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || isTrainer()
+        || (isTrainee() && resource.data.traineeId == uid())
+      );
+
+      allow create: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && request.resource.data.trainerId == uid())
+      );
+
+      allow update: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+      );
+
+      allow delete: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+      );
+    }
+
+    // ── /creditLogs/{logId} ───────────────────────────────────────
+    // Immutable log of every credit top-up
+    match /creditLogs/{logId} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+        || (isTrainee() && resource.data.traineeId == uid())
+      );
+      // Trainers and superadmins can write logs; never update/delete
+      allow create: if isSignedIn() && (isSuperAdmin() || isTrainer());
+      allow update, delete: if false;
+    }
+
+    // ── /progressEntries/{entryId} ────────────────────────────────
+    // Weight, measurements, custom values, personal notes
+    match /progressEntries/{entryId} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+        || (isTrainee() && resource.data.traineeId == uid())
+      );
+
+      // Trainer writes weight / measurements / custom
+      // Trainee writes their own personal_note
+      allow create: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && request.resource.data.trainerId == uid())
+        || (isTrainee()
+            && request.resource.data.traineeId == uid()
+            && request.resource.data.type == "personal_note")
+      );
+
+      allow update: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+        || (isTrainee()
+            && resource.data.traineeId == uid()
+            && resource.data.type == "personal_note")
+      );
+
+      allow delete: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+        || (isTrainee()
+            && resource.data.traineeId == uid()
+            && resource.data.type == "personal_note")
+      );
+    }
+
+    // ── /progressMetrics/{metricId} ───────────────────────────────
+    // Trainer-defined custom metric definitions
+    match /progressMetrics/{metricId} {
+      allow read: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid())
+        || (isTrainee() && resource.data.traineeId == uid())
+      );
+
+      allow create, update: if isSignedIn() && (
+        isSuperAdmin()
+        || (isTrainer() && request.resource.data.trainerId == uid())
+      );
+
+      allow delete: if isSuperAdmin()
+        || (isTrainer() && resource.data.trainerId == uid());
+    }
+
+    // ── /audit_logs ───────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      allow read:  if isSuperAdmin();
+      allow write: if false;
+    }
+  }
+}

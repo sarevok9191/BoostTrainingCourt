@@ -1,0 +1,97 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { getToken, onMessage } from "firebase/messaging";
+import { auth, db, getMessagingInstance } from "../firebase/config";
+
+// VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push Certificates
+// Set VITE_FIREBASE_VAPID_KEY in your .env file.
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "";
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userRole,    setUserRole]    = useState(null);
+  const [loading,     setLoading]     = useState(true);
+
+  async function login(email, password) {
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const snap = await getDoc(doc(db, "users", credential.user.uid));
+    if (!snap.exists()) throw new Error("User profile not found in Firestore.");
+    const role    = snap.data().role;
+    const allowed = ["superadmin", "trainer", "trainee"];
+    if (!allowed.includes(role)) throw new Error("Unknown role: " + role);
+    // Request FCM permission and save token (non-blocking)
+    saveFcmToken(credential.user.uid).catch(() => {});
+    return role;
+  }
+
+  function logout() {
+    return signOut(auth);
+  }
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        setUserRole(snap.exists() ? snap.data().role : null);
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+        setUserRole(null);
+      }
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Listen for foreground FCM messages and show a simple browser notification
+  useEffect(() => {
+    let cleanup = () => {};
+    getMessagingInstance().then((messaging) => {
+      if (!messaging) return;
+      const unsub = onMessage(messaging, (payload) => {
+        const title = payload.notification?.title || "Boost Training Court";
+        const body  = payload.notification?.body  || "";
+        if (Notification.permission === "granted") {
+          new Notification(title, { body, icon: "/favicon.ico" });
+        }
+      });
+      cleanup = unsub;
+    });
+    return () => cleanup();
+  }, []);
+
+  const value = { currentUser, userRole, login, logout, loading };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+// ── Helper: request notification permission + store FCM token ────
+async function saveFcmToken(uid) {
+  if (!VAPID_KEY) return; // Skip if VAPID key not configured
+
+  const messaging = await getMessagingInstance();
+  if (!messaging) return;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+  if (!token) return;
+
+  await updateDoc(doc(db, "users", uid), { fcmToken: token });
+}
