@@ -1,3 +1,5 @@
+import { useLanguage } from "../contexts/LanguageContext";
+
 /** Creates a stable unique key without depending on crypto */
 export function emptyBlock() {
   return {
@@ -22,6 +24,8 @@ export function emptyBlock() {
  *  onNotesChange — (string) => void
  */
 export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", onNotesChange }) {
+  const { t } = useLanguage();
+
   function update(id, field, value) {
     onChange(blocks.map((b) => (b.id === id ? { ...b, [field]: value } : b)));
   }
@@ -33,15 +37,15 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
       {blocks.map((b, i) => (
         <div key={b.id} className="exercise-block">
           <div className="exercise-block-header">
-            <span className="exercise-num">Exercise {i + 1}</span>
+            <span className="exercise-num">{t("exerciseNum")} {i + 1}</span>
             <button type="button" className="sc-btn danger" onClick={() => remove(b.id)}>✕</button>
           </div>
 
           <div className="form-group">
-            <label>Movement</label>
+            <label>{t("movement")}</label>
             <input
               type="text"
-              placeholder="e.g. Bench Press, Squat, Pull-up…"
+              placeholder={t("movementPlaceholder")}
               value={b.movement}
               onChange={(e) => update(b.id, "movement", e.target.value)}
             />
@@ -49,9 +53,9 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
 
           <div className="exercise-row">
             <div className="form-group">
-              <label>Sets</label>
+              <label>{t("sets")}</label>
               <input
-                type="number" min="0" placeholder="3"
+                type="number" min="0" placeholder={t("setsPlaceholder")}
                 value={b.sets}
                 onChange={(e) => update(b.id, "sets", e.target.value)}
               />
@@ -63,23 +67,23 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
                   type="button"
                   className={`toggle-btn${!b.useTime ? " active" : ""}`}
                   onClick={() => update(b.id, "useTime", false)}
-                >Reps</button>
+                >{t("repsLabel")}</button>
                 <button
                   type="button"
                   className={`toggle-btn${b.useTime ? " active" : ""}`}
                   onClick={() => update(b.id, "useTime", true)}
-                >Time</button>
+                >{t("timeLabel")}</button>
               </div>
               {!b.useTime ? (
                 <input
-                  type="number" min="0" placeholder="10"
+                  type="number" min="0" placeholder={t("repsPlaceholder")}
                   value={b.reps}
                   onChange={(e) => update(b.id, "reps", e.target.value)}
                 />
               ) : (
                 <div style={{ display: "flex", gap: "0.4rem" }}>
                   <input
-                    type="number" min="0" placeholder="30"
+                    type="number" min="0" placeholder={t("durationPlaceholder")}
                     value={b.duration}
                     onChange={(e) => update(b.id, "duration", e.target.value)}
                     style={{ flex: 1, minWidth: 0 }}
@@ -97,7 +101,7 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
             </div>
 
             <div className="form-group">
-              <label>Weight (kg) <span className="label-opt">opt.</span></label>
+              <label>{t("weightOptional")} <span className="label-opt">{t("optional")}</span></label>
               <input
                 type="number" min="0" step="0.5" placeholder="60"
                 value={b.weight}
@@ -109,14 +113,14 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
       ))}
 
       <button type="button" className="btn-add-exercise" onClick={add}>
-        + Add Exercise
+        {t("addExercise")}
       </button>
 
       <div className="form-group" style={{ marginTop: "1rem" }}>
-        <label>Session Notes <span className="label-opt">(optional)</span></label>
+        <label>{t("sessionNotesLabel")} <span className="label-opt">({t("optional")})</span></label>
         <textarea
           rows={3}
-          placeholder="General notes about this session…"
+          placeholder={t("sessionNotesPlaceholder")}
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
         />
@@ -127,16 +131,18 @@ export default function ExerciseBlockForm({ blocks = [], onChange, notes = "", o
 
 /** Read-only display of exercise blocks */
 export function ExerciseBlockDisplay({ blocks = [], notes }) {
+  const { t } = useLanguage();
+
   if (!blocks || blocks.length === 0) {
     return notes
       ? <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{notes}</p>
-      : <p style={{ fontSize: "0.85rem", color: "var(--text-hint)", fontStyle: "italic" }}>No exercise notes recorded.</p>;
+      : <p style={{ fontSize: "0.85rem", color: "var(--text-hint)", fontStyle: "italic" }}>{t("noExerciseNotes")}</p>;
   }
   return (
     <div className="exercise-display">
       {blocks.map((b, i) => (
         <div key={b.id || i} className="exercise-display-block">
-          <div className="ex-display-name">{b.movement || `Exercise ${i + 1}`}</div>
+          <div className="ex-display-name">{b.movement || `${t("exerciseNum")} ${i + 1}`}</div>
           <div className="ex-display-row">
             {b.sets   && <span className="ex-chip">{b.sets} sets</span>}
             {!b.useTime && b.reps && <span className="ex-chip">{b.reps} reps</span>}
@@ -147,7 +153,7 @@ export function ExerciseBlockDisplay({ blocks = [], notes }) {
       ))}
       {notes && (
         <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "0.5px solid var(--border)" }}>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-hint)", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes</div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-hint)", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("notes")}</div>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.5 }}>{notes}</p>
         </div>
       )}

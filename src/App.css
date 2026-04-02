@@ -544,7 +544,11 @@ body {
 .form-group select:focus,
 .form-group textarea:focus    { border-color: var(--accent); }
 .form-group input::placeholder,
-.form-group textarea::placeholder { color: var(--text-hint); }
+.form-group textarea::placeholder,
+.form-group select::placeholder    { color: #555555; }
+/* Empty select (no value chosen) shows hint colour */
+.form-group select:invalid,
+.form-group select option[value=""] { color: #555555; }
 .form-group select option     { background: #1e1e1e; color: var(--text); }
 .form-group textarea          { resize: vertical; min-height: 80px; }
 .label-opt                    { color: var(--text-hint); font-weight: 400; }
@@ -1175,4 +1179,61 @@ body {
 /* blue dot = other trainers' sessions */
 .cal-dot.blue {
   background: #4FC3F7;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LANGUAGE TOGGLE BUTTON
+══════════════════════════════════════════════════════════════════ */
+.lang-toggle {
+  position: fixed;
+  top: 0.65rem;
+  right: 0.75rem;
+  z-index: 300;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lang-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SESSION TYPE BADGE (gym / home)
+══════════════════════════════════════════════════════════════════ */
+.session-type-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.session-type-badge.gym  { color: #F5A623; background: rgba(245,166,35,0.12); }
+.session-type-badge.home { color: #4FC3F7; background: rgba(79,195,247,0.12); }
+
+/* ══════════════════════════════════════════════════════════════════
+   ALERT WARNING (orphan-protection checkbox area)
+══════════════════════════════════════════════════════════════════ */
+.alert-warning {
+  background: rgba(255, 160, 50, 0.10);
+  border: 1px solid rgba(245, 166, 35, 0.45);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #F5A623;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.alert-warning input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
 }

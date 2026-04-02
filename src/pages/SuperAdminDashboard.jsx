@@ -4,14 +4,16 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { createUserAccount, deleteUserAccount } from "../firebase/userManagement";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage, LangToggle } from "../contexts/LanguageContext";
 import Modal from "../components/Modal";
 import BottomNav from "../components/BottomNav";
 
+// Tab label keys (translated by BottomNav via useLanguage)
 const TABS = [
-  { key: "home",     label: "Home",     icon: "home"     },
-  { key: "trainers", label: "Trainers", icon: "trainers" },
-  { key: "trainees", label: "Trainees", icon: "trainees" },
-  { key: "more",     label: "More",     icon: "more"     },
+  { key: "home",     label: "home",     icon: "home"     },
+  { key: "trainers", label: "trainers", icon: "trainers" },
+  { key: "trainees", label: "trainees", icon: "trainees" },
+  { key: "more",     label: "more",     icon: "more"     },
 ];
 
 function CreditBadge({ credits }) {
@@ -22,7 +24,8 @@ function CreditBadge({ credits }) {
 
 export default function SuperAdminDashboard() {
   const { currentUser, logout } = useAuth();
-  const navigate = useNavigate();
+  const { t }                   = useLanguage();
+  const navigate                = useNavigate();
 
   const [tab,       setTab]       = useState("home");
   const [trainers,  setTrainers]  = useState([]);
@@ -36,8 +39,12 @@ export default function SuperAdminDashboard() {
   const [addLoading, setAddLoading] = useState(false);
 
   // Delete confirm
-  const [delTarget,  setDelTarget]  = useState(null);
-  const [delLoading, setDelLoading] = useState(false);
+  const [delTarget,        setDelTarget]        = useState(null);
+  const [delLoading,       setDelLoading]       = useState(false);
+  const [delConfirmChecked, setDelConfirmChecked] = useState(false);
+
+  // Reset checkbox every time a new target is selected
+  useEffect(() => { setDelConfirmChecked(false); }, [delTarget]);
 
   // ── Firestore listeners ─────────────────────────────────────────
   useEffect(() => {
@@ -72,10 +79,17 @@ export default function SuperAdminDashboard() {
     if (!delTarget) return;
     setDelLoading(true);
     try {
+      // Delete all trainees belonging to this trainer first
+      const trainerTrainees = trainees.filter((tr) => tr.trainerId === delTarget.id);
+      for (const trainee of trainerTrainees) {
+        await deleteUserAccount(trainee.id);
+      }
+      // Then delete the trainer
       await deleteUserAccount(delTarget.id);
       setDelTarget(null);
+      setDelConfirmChecked(false);
     } catch (err) {
-      alert("Delete failed: " + err.message);
+      alert(t("error") + ": " + err.message);
     } finally {
       setDelLoading(false);
     }
@@ -83,18 +97,19 @@ export default function SuperAdminDashboard() {
 
   async function handleLogout() { await logout(); navigate("/login", { replace: true }); }
 
-  const traineeCountFor = (tid) => trainees.filter((t) => t.trainerId === tid).length;
+  const traineeCountFor = (tid) => trainees.filter((tr) => tr.trainerId === tid).length;
 
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="app-shell">
+      <LangToggle />
       <main className="dash-main">
 
         {/* ══════════ HOME ══════════ */}
         {tab === "home" && (
           <>
             <div className="home-greeting">
-              <div className="greeting-hello">Dashboard</div>
+              <div className="greeting-hello">{t("dashboard")}</div>
               <div className="greeting-name">Boost Training Court</div>
             </div>
 
@@ -102,46 +117,46 @@ export default function SuperAdminDashboard() {
               <div className="stat-card">
                 <span className="stat-icon">🏋️</span>
                 <span className="stat-value">{trainers.length}</span>
-                <span className="stat-label">Total Trainers</span>
+                <span className="stat-label">{t("totalTrainers")}</span>
               </div>
               <div className="stat-card">
                 <span className="stat-icon">👤</span>
                 <span className="stat-value">{trainees.length}</span>
-                <span className="stat-label">Total Trainees</span>
+                <span className="stat-label">{t("totalTrainees")}</span>
               </div>
               <div className="stat-card accent">
                 <span className="stat-icon">✅</span>
                 <span className="stat-value">{trainers.length + trainees.length + 1}</span>
-                <span className="stat-label">Active Accounts</span>
+                <span className="stat-label">{t("activeAccounts")}</span>
               </div>
               <div className="stat-card">
                 <span className="stat-icon">📊</span>
                 <span className="stat-value">
                   {trainers.length > 0 ? (trainees.length / trainers.length).toFixed(1) : "—"}
                 </span>
-                <span className="stat-label">Trainees / Trainer</span>
+                <span className="stat-label">{t("traineesPerTrainer")}</span>
               </div>
             </div>
 
             {trainers.length > 0 && (
               <section className="section-card">
                 <div className="section-header">
-                  <h2>Trainer Overview</h2>
-                  <span className="role-badge badge-superadmin">Super Admin</span>
+                  <h2>{t("trainerOverview")}</h2>
+                  <span className="role-badge badge-superadmin">{t("superAdminRole")}</span>
                 </div>
                 <div className="table-wrapper">
                   <table className="data-table">
-                    <thead><tr><th>Trainer</th><th>Trainees</th></tr></thead>
+                    <thead><tr><th>{t("name")}</th><th>{t("traineesCol")}</th></tr></thead>
                     <tbody>
-                      {trainers.map((t) => (
-                        <tr key={t.id}>
+                      {trainers.map((tr) => (
+                        <tr key={tr.id}>
                           <td>
                             <div className="cell-name">
-                              <span className="avatar">{(t.displayName || t.email)[0].toUpperCase()}</span>
-                              {t.displayName || t.email}
+                              <span className="avatar">{(tr.displayName || tr.email)[0].toUpperCase()}</span>
+                              {tr.displayName || tr.email}
                             </div>
                           </td>
-                          <td><span className="count-badge">{traineeCountFor(t.id)}</span></td>
+                          <td><span className="count-badge">{traineeCountFor(tr.id)}</span></td>
                         </tr>
                       ))}
                     </tbody>
@@ -156,43 +171,51 @@ export default function SuperAdminDashboard() {
         {tab === "trainers" && (
           <section className="section-card">
             <div className="section-header">
-              <h2>Trainers</h2>
+              <h2>{t("trainers")}</h2>
               <button className="btn-primary" onClick={() => { setAddError(""); setShowAdd(true); }}>
-                + Add Trainer
+                {t("addTrainer")}
               </button>
             </div>
 
             {loading ? (
-              <p className="placeholder-text">Loading…</p>
+              <p className="placeholder-text">{t("loading")}</p>
             ) : trainers.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">🏋️</span>
-                <p>No trainers yet. Add your first trainer.</p>
+                <p>{t("noTrainersYet")}</p>
               </div>
             ) : (
               <div className="table-wrapper">
                 <table className="data-table">
                   <thead>
-                    <tr><th>Name</th><th>Email</th><th>Trainees</th><th>Created</th><th></th></tr>
+                    <tr>
+                      <th>{t("name")}</th>
+                      <th>{t("emailLabel")}</th>
+                      <th>{t("traineesCol")}</th>
+                      <th>{t("createdCol")}</th>
+                      <th></th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {trainers.map((t) => (
-                      <tr key={t.id}>
+                    {trainers.map((tr) => (
+                      <tr key={tr.id}>
                         <td>
                           <div className="cell-name">
-                            <span className="avatar">{(t.displayName || t.email)[0].toUpperCase()}</span>
-                            {t.displayName || "—"}
+                            <span className="avatar">{(tr.displayName || tr.email)[0].toUpperCase()}</span>
+                            {tr.displayName || "—"}
                           </div>
                         </td>
-                        <td className="cell-muted">{t.email}</td>
-                        <td><span className="count-badge">{traineeCountFor(t.id)}</span></td>
+                        <td className="cell-muted">{tr.email}</td>
+                        <td><span className="count-badge">{traineeCountFor(tr.id)}</span></td>
                         <td className="cell-muted">
-                          {t.createdAt?.toDate
-                            ? t.createdAt.toDate().toLocaleDateString()
-                            : t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "—"}
+                          {tr.createdAt?.toDate
+                            ? tr.createdAt.toDate().toLocaleDateString()
+                            : tr.createdAt ? new Date(tr.createdAt).toLocaleDateString() : "—"}
                         </td>
                         <td>
-                          <button className="btn-danger-sm" onClick={() => setDelTarget(t)}>Delete</button>
+                          <button className="btn-danger-sm" onClick={() => setDelTarget(tr)}>
+                            {t("delete")}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -206,31 +229,36 @@ export default function SuperAdminDashboard() {
         {/* ══════════ TRAINEES ══════════ */}
         {tab === "trainees" && (
           <section className="section-card">
-            <div className="section-header"><h2>All Trainees</h2></div>
+            <div className="section-header"><h2>{t("allTrainees")}</h2></div>
             {trainees.length === 0 ? (
-              <p className="placeholder-text">No trainees yet.</p>
+              <p className="placeholder-text">{t("noTraineesYetAdmin")}</p>
             ) : (
               <div className="table-wrapper">
                 <table className="data-table">
                   <thead>
-                    <tr><th>Name</th><th>Email</th><th>Trainer</th><th>Credits</th></tr>
+                    <tr>
+                      <th>{t("name")}</th>
+                      <th>{t("emailLabel")}</th>
+                      <th>{t("trainer")}</th>
+                      <th>{t("credits")}</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {trainees.map((t) => {
-                      const trainer = trainers.find((r) => r.id === t.trainerId);
+                    {trainees.map((tr) => {
+                      const trainer = trainers.find((r) => r.id === tr.trainerId);
                       return (
-                        <tr key={t.id}>
+                        <tr key={tr.id}>
                           <td>
                             <div className="cell-name">
                               <span className="avatar avatar-sm">
-                                {(t.displayName || t.email)[0].toUpperCase()}
+                                {(tr.displayName || tr.email)[0].toUpperCase()}
                               </span>
-                              {t.displayName || "—"}
+                              {tr.displayName || "—"}
                             </div>
                           </td>
-                          <td className="cell-muted">{t.email}</td>
+                          <td className="cell-muted">{tr.email}</td>
                           <td className="cell-muted">{trainer?.displayName || trainer?.email || "—"}</td>
-                          <td><CreditBadge credits={t.credits} /></td>
+                          <td><CreditBadge credits={tr.credits} /></td>
                         </tr>
                       );
                     })}
@@ -250,8 +278,8 @@ export default function SuperAdminDashboard() {
               </div>
               <div>
                 <div className="more-name">{currentUser?.email}</div>
-                <div className="more-email">Super Administrator</div>
-                <div className="more-role"><span className="role-badge badge-superadmin">Super Admin</span></div>
+                <div className="more-email">{t("superAdmin")}</div>
+                <div className="more-role"><span className="role-badge badge-superadmin">{t("superAdminRole")}</span></div>
               </div>
             </div>
 
@@ -262,7 +290,7 @@ export default function SuperAdminDashboard() {
                   <polyline points="16 17 21 12 16 7"/>
                   <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
-                Sign Out
+                {t("signOut")}
               </button>
             </div>
           </>
@@ -271,48 +299,73 @@ export default function SuperAdminDashboard() {
 
       <BottomNav tabs={TABS} activeTab={tab} onTabChange={setTab} />
 
-      {/* Add Trainer Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trainer">
+      {/* ── Add Trainer Modal ─────────────────────────────────────── */}
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={t("addNewTrainer")}>
         <form onSubmit={handleAddTrainer} className="modal-form">
           {addError && <div className="alert-error">{addError}</div>}
           <div className="form-group">
-            <label>Full Name</label>
+            <label>{t("fullName")}</label>
             <input type="text" required placeholder="John Doe"
               value={addForm.displayName}
               onChange={(e) => setAddForm({ ...addForm, displayName: e.target.value })} />
           </div>
           <div className="form-group">
-            <label>Email</label>
+            <label>{t("email")}</label>
             <input type="email" required placeholder="trainer@gym.com"
               value={addForm.email}
               onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} />
           </div>
           <div className="form-group">
-            <label>Password</label>
-            <input type="password" required minLength={6} placeholder="Min. 6 characters"
+            <label>{t("password")}</label>
+            <input type="password" required minLength={6} placeholder={t("minChars")}
               value={addForm.password}
               onChange={(e) => setAddForm({ ...addForm, password: e.target.value })} />
           </div>
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>{t("cancel")}</button>
             <button type="submit" className="btn-primary" disabled={addLoading}>
-              {addLoading ? "Creating…" : "Create Trainer"}
+              {addLoading ? t("creating") : t("createTrainer")}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete Confirm Modal */}
-      <Modal open={!!delTarget} onClose={() => setDelTarget(null)} title="Delete Trainer">
+      {/* ── Delete Trainer Confirm Modal ─────────────────────────── */}
+      <Modal open={!!delTarget} onClose={() => setDelTarget(null)} title={t("deleteTrainer")}>
         <p className="confirm-text">
-          Permanently delete trainer{" "}
-          <strong>{delTarget?.displayName || delTarget?.email}</strong>?<br />
-          <span className="text-muted">Their Firestore profile and all data will be removed.</span>
+          {delTarget?.displayName || delTarget?.email}
+          {" — "}
+          <span className="text-muted">{t("permanentDeleteWarning")}</span>
         </p>
+
+        {/* Orphan protection: warn about trainees */}
+        {delTarget && traineeCountFor(delTarget.id) > 0 && (
+          <div className="alert-warning" style={{ marginBottom: "0.75rem" }}>
+            <p style={{ marginBottom: "0.5rem" }}>
+              ⚠️ {t("deleteTrainerWarning").replace("{count}", traineeCountFor(delTarget.id))}
+            </p>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem" }}>
+              <input
+                type="checkbox"
+                checked={delConfirmChecked}
+                onChange={(e) => setDelConfirmChecked(e.target.checked)}
+              />
+              {t("deleteTrainerConfirmCheck")}
+            </label>
+          </div>
+        )}
+
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={() => setDelTarget(null)}>Cancel</button>
-          <button className="btn-danger" onClick={handleDelete} disabled={delLoading}>
-            {delLoading ? "Deleting…" : "Delete Trainer"}
+          <button className="btn-secondary" onClick={() => setDelTarget(null)}>{t("cancel")}</button>
+          <button
+            className="btn-danger"
+            onClick={handleDelete}
+            disabled={
+              delLoading ||
+              (delTarget && traineeCountFor(delTarget.id) > 0 && !delConfirmChecked)
+            }
+          >
+            {delLoading ? t("deleting") : t("deleteTrainer")}
           </button>
         </div>
       </Modal>

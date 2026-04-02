@@ -1,9 +1,10 @@
 import { useState } from "react";
 import {
-  doc, updateDoc, addDoc, collection,
+  doc, addDoc, collection,
   runTransaction, serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { useLanguage } from "../contexts/LanguageContext";
 import ProgressPanel from "./ProgressPanel";
 import SessionDetailModal from "./SessionDetailModal";
 
@@ -12,9 +13,9 @@ function fmtTime(t) {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
-function fmtFullDate(dateStr) {
+function fmtFullDate(dateStr, locale) {
   if (!dateStr) return "";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString(locale, {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 }
@@ -25,11 +26,20 @@ function CreditBadge({ credits }) {
   return <span className={`credit-badge ${cls}`}>{n}</span>;
 }
 
+function SessionTypeBadge({ type }) {
+  const { t } = useLanguage();
+  if (!type || type === "gym") return <span className="session-type-badge gym">{t("gymBadge")}</span>;
+  return <span className="session-type-badge home">{t("homeBadge")}</span>;
+}
+
 /**
  * TraineeDetailOverlay
  * Shows trainee profile, sessions, and progress inside the trainer dashboard.
  */
 export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId, onBack }) {
+  const { t, lang }        = useLanguage();
+  const locale             = lang === "tr" ? "tr-TR" : "en-US";
+
   const [subTab,           setSubTab]           = useState("sessions");
   const [selectedSession,  setSelectedSession]  = useState(null);
   const [showTopUp,        setShowTopUp]        = useState(false);
@@ -63,13 +73,14 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
       setShowTopUp(false);
       setTopUpAmount("10");
     } catch (err) {
-      alert("Top-up failed: " + err.message);
+      alert(t("error") + ": " + err.message);
     } finally {
       setTopUpLoading(false);
     }
   }
 
   const initials = (trainee.displayName || trainee.email || "?")[0].toUpperCase();
+  const todayISO = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="trainee-detail-overlay">
@@ -78,7 +89,7 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <polyline points="15 18 9 12 15 6" />
         </svg>
-        Back to Trainees
+        {t("backToTrainees")}
       </button>
 
       {/* ── Profile header ── */}
@@ -91,7 +102,7 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
           <div className="more-email">{trainee.email}</div>
           {trainee.declaredPassword && (
             <div className="declared-pw">
-              <span>Password: </span>
+              <span>{t("declaredPassword")}: </span>
               {showPassword
                 ? <span style={{ color: "var(--text)" }}>{trainee.declaredPassword}</span>
                 : <span style={{ color: "var(--text-hint)", letterSpacing: "0.1em" }}>••••••••</span>}
@@ -99,7 +110,7 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
                 className="sc-btn"
                 style={{ padding: "2px 7px", marginLeft: "0.4rem" }}
                 onClick={() => setShowPassword((p) => !p)}
-              >{showPassword ? "Hide" : "Show"}</button>
+              >{showPassword ? t("hidePassword") : t("showPassword")}</button>
             </div>
           )}
         </div>
@@ -107,7 +118,7 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
           <CreditBadge credits={trainee.credits} />
           <button className="btn-primary" style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
             onClick={() => setShowTopUp(true)}>
-            + Top Up
+            {t("topUp")}
           </button>
         </div>
       </div>
@@ -117,15 +128,15 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
         <div className="add-progress-form" style={{ marginBottom: "0.75rem" }}>
           <div className="form-row">
             <div className="form-group">
-              <label>Credits to Add</label>
+              <label>{t("creditsToAdd")}</label>
               <input type="number" min="1" value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)} />
             </div>
             <div className="form-group" style={{ justifyContent: "flex-end", marginTop: "auto" }}>
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setShowTopUp(false)}>Cancel</button>
+                <button className="btn-secondary" onClick={() => setShowTopUp(false)}>{t("cancel")}</button>
                 <button className="btn-primary" onClick={handleTopUp} disabled={topUpLoading}>
-                  {topUpLoading ? "…" : "Confirm"}
+                  {topUpLoading ? "…" : t("confirmTopUp")}
                 </button>
               </div>
             </div>
@@ -135,13 +146,14 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
 
       {/* ── Sub-tabs ── */}
       <div className="detail-sub-tabs">
-        {["sessions", "progress"].map((t) => (
-          <button
-            key={t}
-            className={`detail-sub-btn${subTab === t ? " active" : ""}`}
-            onClick={() => setSubTab(t)}
-          >{t.charAt(0).toUpperCase() + t.slice(1)}</button>
-        ))}
+        <button
+          className={`detail-sub-btn${subTab === "sessions" ? " active" : ""}`}
+          onClick={() => setSubTab("sessions")}
+        >{t("sessionsTab")}</button>
+        <button
+          className={`detail-sub-btn${subTab === "progress" ? " active" : ""}`}
+          onClick={() => setSubTab("progress")}
+        >{t("progressTab")}</button>
       </div>
 
       {/* ── SESSIONS tab ── */}
@@ -150,21 +162,22 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
           {sortedSessions.length === 0 ? (
             <div className="empty-state">
               <span className="empty-icon">📋</span>
-              <p>No sessions yet for this trainee.</p>
+              <p>{t("noSessionsYet")}</p>
             </div>
           ) : (
             <div className="history-list">
               {sortedSessions.map((s) => (
                 <div
                   key={s.id}
-                  className={`history-item${s.date >= new Date().toISOString().slice(0,10) ? " upcoming" : ""}${s.status === "completed" ? " done" : ""}`}
+                  className={`history-item${s.date >= todayISO ? " upcoming" : ""}${s.status === "completed" ? " done" : ""}`}
                   style={{ cursor: "pointer" }}
                   onClick={() => setSelectedSession(s)}
                 >
                   <div className="history-left">
-                    <div className="history-date">{fmtFullDate(s.date)}</div>
+                    <div className="history-date">{fmtFullDate(s.date, locale)}</div>
                     <div className="history-time">{fmtTime(s.time)}</div>
-                    {s.status === "completed" && <span className="history-done-badge">✓ Done</span>}
+                    <SessionTypeBadge type={s.sessionType} />
+                    {s.status === "completed" && <span className="history-done-badge">{t("done")}</span>}
                   </div>
                   <div className="history-right">
                     {s.exerciseBlocks?.length > 0 ? (
@@ -179,7 +192,7 @@ export default function TraineeDetailOverlay({ trainee, sessions = [], trainerId
                     ) : s.notes ? (
                       <p className="history-notes">{s.notes.slice(0, 80)}{s.notes.length > 80 ? "…" : ""}</p>
                     ) : (
-                      <p className="history-notes empty">Tap to view / edit notes</p>
+                      <p className="history-notes empty">{t("tapToViewEdit")}</p>
                     )}
                   </div>
                 </div>

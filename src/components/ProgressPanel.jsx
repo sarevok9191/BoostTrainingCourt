@@ -1,19 +1,12 @@
 import { useState, useEffect } from "react";
 import {
   collection, query, where, onSnapshot,
-  addDoc, updateDoc, deleteDoc, doc,
+  addDoc, deleteDoc, doc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { useLanguage } from "../contexts/LanguageContext";
 import LineChart from "./LineChart";
-
-const SUB_TABS = [
-  { key: "weight",       label: "Weight"   },
-  { key: "measurements", label: "Body"     },
-  { key: "exercises",    label: "Exercise" },
-  { key: "custom",       label: "Custom"   },
-  { key: "notes",        label: "Notes"    },
-];
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -27,6 +20,9 @@ function todayStr() {
  * trainerId:  Firestore uid of the trainer (used when creating records)
  */
 export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, sessions = [] }) {
+  const { t, lang } = useLanguage();
+  const locale      = lang === "tr" ? "tr-TR" : "en-US";
+
   const [subTab,      setSubTab]      = useState("weight");
   const [entries,     setEntries]     = useState([]);
   const [metrics,     setMetrics]     = useState([]);
@@ -47,6 +43,14 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
   const [valForm,     setValForm]     = useState({ date: todayStr(), value: "" });
 
   const [selExercise, setSelExercise] = useState("");
+
+  const SUB_TABS = [
+    { key: "weight",       labelKey: "weight"           },
+    { key: "measurements", labelKey: "bodyMeasurements" },
+    { key: "exercises",    labelKey: "exercise"         },
+    { key: "custom",       labelKey: "custom"           },
+    { key: "notes",        labelKey: "notes"            },
+  ];
 
   // ── Listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -126,18 +130,20 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
   }
 
   function fmtDate(d) {
-    return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return new Date(d + "T00:00:00").toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
   }
+
+  const measFields = ["chest", "waist", "hip", "arm", "leg"];
 
   return (
     <div className="progress-panel">
       <div className="progress-sub-tabs">
-        {SUB_TABS.map((t) => (
+        {SUB_TABS.map((tab) => (
           <button
-            key={t.key}
-            className={`progress-sub-btn${subTab === t.key ? " active" : ""}`}
-            onClick={() => setSubTab(t.key)}
-          >{t.label}</button>
+            key={tab.key}
+            className={`progress-sub-btn${subTab === tab.key ? " active" : ""}`}
+            onClick={() => setSubTab(tab.key)}
+          >{t(tab.labelKey)}</button>
         ))}
       </div>
 
@@ -154,29 +160,29 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
             <>
               {!showAddW ? (
                 <button className="btn-primary" style={{ marginBottom: "0.75rem" }} onClick={() => setShowAddW(true)}>
-                  + Log Weight
+                  {t("logWeight")}
                 </button>
               ) : (
                 <div className="add-progress-form">
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Date</label>
+                      <label>{t("date")}</label>
                       <input type="date" value={wForm.date} onChange={(e) => setWForm({ ...wForm, date: e.target.value })} />
                     </div>
                     <div className="form-group">
-                      <label>Weight (kg)</label>
+                      <label>{t("weight")} (kg)</label>
                       <input type="number" min="0" step="0.1" placeholder="75.0" value={wForm.weight}
                         onChange={(e) => setWForm({ ...wForm, weight: e.target.value })} />
                     </div>
                   </div>
                   <div className="modal-actions">
-                    <button className="btn-secondary" onClick={() => setShowAddW(false)}>Cancel</button>
+                    <button className="btn-secondary" onClick={() => setShowAddW(false)}>{t("cancel")}</button>
                     <button className="btn-primary" onClick={async () => {
                       if (!wForm.weight) return;
                       await addEntry({ type: "weight", date: wForm.date, weight: parseFloat(wForm.weight) });
                       setWForm({ date: todayStr(), weight: "" });
                       setShowAddW(false);
-                    }}>Save</button>
+                    }}>{t("save")}</button>
                   </div>
                 </div>
               )}
@@ -185,7 +191,7 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
           {weightEntries.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem 0" }}>
               <span className="empty-icon">⚖️</span>
-              <p>No weight entries yet.</p>
+              <p>{t("noWeightEntries")}</p>
             </div>
           ) : (
             <div className="progress-entries-list">
@@ -212,33 +218,31 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
             <>
               {!showAddM ? (
                 <button className="btn-primary" style={{ marginBottom: "0.75rem" }} onClick={() => setShowAddM(true)}>
-                  + Log Measurements
+                  {t("logMeasurements")}
                 </button>
               ) : (
                 <div className="add-progress-form">
                   <div className="form-group">
-                    <label>Date</label>
+                    <label>{t("date")}</label>
                     <input type="date" value={mForm.date} onChange={(e) => setMForm({ ...mForm, date: e.target.value })} />
                   </div>
-                  {["chest", "waist", "hip", "arm", "leg"].map((field) => (
+                  {measFields.map((field) => (
                     <div className="form-group" key={field}>
-                      <label>{field.charAt(0).toUpperCase() + field.slice(1)} (cm) <span className="label-opt">opt.</span></label>
+                      <label>{t(field)} (cm) <span className="label-opt">{t("optional")}</span></label>
                       <input type="number" min="0" step="0.5" placeholder="—"
                         value={mForm[field]}
                         onChange={(e) => setMForm({ ...mForm, [field]: e.target.value })} />
                     </div>
                   ))}
                   <div className="modal-actions">
-                    <button className="btn-secondary" onClick={() => setShowAddM(false)}>Cancel</button>
+                    <button className="btn-secondary" onClick={() => setShowAddM(false)}>{t("cancel")}</button>
                     <button className="btn-primary" onClick={async () => {
                       const data = { type: "measurements", date: mForm.date };
-                      ["chest", "waist", "hip", "arm", "leg"].forEach((f) => {
-                        if (mForm[f]) data[f] = parseFloat(mForm[f]);
-                      });
+                      measFields.forEach((f) => { if (mForm[f]) data[f] = parseFloat(mForm[f]); });
                       await addEntry(data);
                       setMForm({ date: todayStr(), chest: "", waist: "", hip: "", arm: "", leg: "" });
                       setShowAddM(false);
-                    }}>Save</button>
+                    }}>{t("save")}</button>
                   </div>
                 </div>
               )}
@@ -247,7 +251,7 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
           {measEntries.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem 0" }}>
               <span className="empty-icon">📏</span>
-              <p>No body measurements yet.</p>
+              <p>{t("noMeasurements")}</p>
             </div>
           ) : (
             <div className="progress-entries-list">
@@ -256,8 +260,8 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
                   <div style={{ flex: 1 }}>
                     <div className="entry-date">{fmtDate(e.date)}</div>
                     <div className="meas-chips">
-                      {["chest", "waist", "hip", "arm", "leg"].map((f) =>
-                        e[f] ? <span key={f} className="ex-chip">{f}: {e[f]}cm</span> : null
+                      {measFields.map((f) =>
+                        e[f] ? <span key={f} className="ex-chip">{t(f)}: {e[f]}cm</span> : null
                       )}
                     </div>
                   </div>
@@ -277,14 +281,14 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
           {exerciseNames.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem 0" }}>
               <span className="empty-icon">🏋️</span>
-              <p>No exercise data yet. Complete sessions with exercise blocks to see progression.</p>
+              <p>{t("noExerciseDataComplete")}</p>
             </div>
           ) : (
             <>
               <div className="form-group" style={{ marginBottom: "1rem" }}>
-                <label>Select Exercise</label>
+                <label>{t("exercise")}</label>
                 <select value={selExercise} onChange={(e) => setSelExercise(e.target.value)}>
-                  <option value="">— Choose exercise —</option>
+                  <option value="">{t("selectExercise")}</option>
                   {exerciseNames.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
@@ -328,25 +332,25 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
             <>
               {!showAddMet ? (
                 <button className="btn-primary" style={{ marginBottom: "0.75rem" }} onClick={() => setShowAddMet(true)}>
-                  + Define Metric
+                  {t("defineMetric")}
                 </button>
               ) : (
                 <div className="add-progress-form">
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Metric Name</label>
+                      <label>{t("metricName")}</label>
                       <input type="text" placeholder="e.g. VO2 Max" value={metForm.name}
                         onChange={(e) => setMetForm({ ...metForm, name: e.target.value })} />
                     </div>
                     <div className="form-group">
-                      <label>Unit</label>
+                      <label>{t("unit")}</label>
                       <input type="text" placeholder="e.g. bpm, kg, %" value={metForm.unit}
                         onChange={(e) => setMetForm({ ...metForm, unit: e.target.value })} />
                     </div>
                   </div>
                   <div className="modal-actions">
-                    <button className="btn-secondary" onClick={() => setShowAddMet(false)}>Cancel</button>
-                    <button className="btn-primary" onClick={addMetric}>Create</button>
+                    <button className="btn-secondary" onClick={() => setShowAddMet(false)}>{t("cancel")}</button>
+                    <button className="btn-primary" onClick={addMetric}>{t("confirm")}</button>
                   </div>
                 </div>
               )}
@@ -356,7 +360,7 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
           {metrics.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem 0" }}>
               <span className="empty-icon">📊</span>
-              <p>{isTrainer ? "Define a custom metric to start tracking." : "No custom metrics yet."}</p>
+              <p>{isTrainer ? t("noCustomMetrics") : t("noCustomMetricsTrainee")}</p>
             </div>
           ) : (
             metrics.map((m) => {
@@ -370,7 +374,7 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
                     {isTrainer && (
                       <div style={{ display: "flex", gap: "0.4rem" }}>
                         <button className="sc-btn" onClick={() => { setShowAddVal(m.id); setValForm({ date: todayStr(), value: "" }); }}>
-                          + Value
+                          {t("addValue")}
                         </button>
                         <button className="sc-btn danger" onClick={() => delMetric(m.id)}>✕</button>
                       </div>
@@ -380,19 +384,19 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
                     <div className="add-progress-form">
                       <div className="form-row">
                         <div className="form-group">
-                          <label>Date</label>
+                          <label>{t("date")}</label>
                           <input type="date" value={valForm.date}
                             onChange={(e) => setValForm({ ...valForm, date: e.target.value })} />
                         </div>
                         <div className="form-group">
-                          <label>Value ({m.unit})</label>
+                          <label>{t("unit")} ({m.unit})</label>
                           <input type="number" step="any" value={valForm.value}
                             onChange={(e) => setValForm({ ...valForm, value: e.target.value })} />
                         </div>
                       </div>
                       <div className="modal-actions">
-                        <button className="btn-secondary" onClick={() => setShowAddVal(null)}>Cancel</button>
-                        <button className="btn-primary" onClick={() => addMetricValue(m.id)}>Save</button>
+                        <button className="btn-secondary" onClick={() => setShowAddVal(null)}>{t("cancel")}</button>
+                        <button className="btn-primary" onClick={() => addMetricValue(m.id)}>{t("save")}</button>
                       </div>
                     </div>
                   )}
@@ -430,38 +434,38 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
             <>
               {!showAddN ? (
                 <button className="btn-primary" style={{ marginBottom: "0.75rem" }} onClick={() => setShowAddN(true)}>
-                  + Add Note
+                  {t("addNote")}
                 </button>
               ) : (
                 <div className="add-progress-form">
                   <div className="form-group">
-                    <label>Date</label>
+                    <label>{t("date")}</label>
                     <input type="date" value={nForm.date} onChange={(e) => setNForm({ ...nForm, date: e.target.value })} />
                   </div>
                   <div className="form-group">
-                    <label>How did you feel? <span className="label-opt">opt.</span></label>
-                    <textarea rows={3} placeholder="Energy, mood, motivation…" value={nForm.text}
+                    <label>{t("howDidYouFeel")} <span className="label-opt">{t("optional")}</span></label>
+                    <textarea rows={3} placeholder={t("feelingPlaceholder")} value={nForm.text}
                       onChange={(e) => setNForm({ ...nForm, text: e.target.value })} />
                   </div>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Energy Level <span className="label-opt">opt.</span></label>
-                      <input type="text" placeholder="e.g. High, 7/10" value={nForm.energy}
+                      <label>{t("energyLevel")} <span className="label-opt">{t("optional")}</span></label>
+                      <input type="text" placeholder={t("energyPlaceholder")} value={nForm.energy}
                         onChange={(e) => setNForm({ ...nForm, energy: e.target.value })} />
                     </div>
                     <div className="form-group">
-                      <label>Sleep <span className="label-opt">opt.</span></label>
-                      <input type="text" placeholder="e.g. 8h, poor" value={nForm.sleep}
+                      <label>{t("sleep")} <span className="label-opt">{t("optional")}</span></label>
+                      <input type="text" placeholder={t("sleepPlaceholder")} value={nForm.sleep}
                         onChange={(e) => setNForm({ ...nForm, sleep: e.target.value })} />
                     </div>
                   </div>
                   <div className="modal-actions">
-                    <button className="btn-secondary" onClick={() => setShowAddN(false)}>Cancel</button>
+                    <button className="btn-secondary" onClick={() => setShowAddN(false)}>{t("cancel")}</button>
                     <button className="btn-primary" onClick={async () => {
                       await addEntry({ type: "personal_note", date: nForm.date, text: nForm.text, energy: nForm.energy, sleep: nForm.sleep });
                       setNForm({ date: todayStr(), text: "", energy: "", sleep: "" });
                       setShowAddN(false);
-                    }}>Save Note</button>
+                    }}>{t("saveNote")}</button>
                   </div>
                 </div>
               )}
@@ -470,7 +474,7 @@ export default function ProgressPanel({ traineeId, trainerId, isTrainer = true, 
           {noteEntries.length === 0 ? (
             <div className="empty-state" style={{ padding: "1.5rem 0" }}>
               <span className="empty-icon">📝</span>
-              <p>{isTrainer ? "Trainee hasn't added any personal notes yet." : "No personal notes yet. Add how you feel after sessions!"}</p>
+              <p>{isTrainer ? t("noPersonalNotesTrainer") : t("noPersonalNotes")}</p>
             </div>
           ) : (
             <div className="progress-entries-list">

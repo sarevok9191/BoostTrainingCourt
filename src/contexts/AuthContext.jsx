@@ -26,8 +26,6 @@ export function AuthProvider({ children }) {
     const role    = snap.data().role;
     const allowed = ["superadmin", "trainer", "trainee"];
     if (!allowed.includes(role)) throw new Error("Unknown role: " + role);
-    // Request FCM permission and save token (non-blocking)
-    saveFcmToken(credential.user.uid).catch(() => {});
     return role;
   }
 
@@ -35,12 +33,17 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   }
 
+  // ── Listen for auth state changes ────────────────────────────────
+  // saveFcmToken is called here so it runs on every app load / token
+  // refresh, not only on explicit sign-in.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
         setUserRole(snap.exists() ? snap.data().role : null);
         setCurrentUser(user);
+        // Refresh FCM token on every login / page load (non-blocking)
+        saveFcmToken(user.uid).catch(() => {});
       } else {
         setCurrentUser(null);
         setUserRole(null);
@@ -50,7 +53,7 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // Listen for foreground FCM messages and show a simple browser notification
+  // ── Listen for foreground FCM messages ───────────────────────────
   useEffect(() => {
     let cleanup = () => {};
     getMessagingInstance().then((messaging) => {

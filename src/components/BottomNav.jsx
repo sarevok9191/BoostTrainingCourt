@@ -1,3 +1,5 @@
+import { useLanguage } from "../contexts/LanguageContext";
+
 const ICONS = {
   home: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -44,7 +46,12 @@ const ICONS = {
   ),
 };
 
+/**
+ * BottomNav
+ * tab.label is treated as a translation key (e.g. "home", "schedule")
+ */
 export default function BottomNav({ tabs, activeTab, onTabChange }) {
+  const { t } = useLanguage();
   return (
     <nav className="bottom-nav">
       {tabs.map((tab) => (
@@ -54,7 +61,7 @@ export default function BottomNav({ tabs, activeTab, onTabChange }) {
           onClick={() => onTabChange(tab.key)}
         >
           {ICONS[tab.icon] ?? ICONS.more}
-          <span className="nav-label">{tab.label}</span>
+          <span className="nav-label">{t(tab.label)}</span>
         </button>
       ))}
     </nav>

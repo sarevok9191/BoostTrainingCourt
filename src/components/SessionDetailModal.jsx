@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { useLanguage } from "../contexts/LanguageContext";
 import Modal from "./Modal";
 import ExerciseBlockForm, { ExerciseBlockDisplay, emptyBlock } from "./ExerciseBlockForm";
 
@@ -17,6 +18,7 @@ function fmtTime(t) {
  *            false → trainer view (editable)
  */
 export default function SessionDetailModal({ session, onClose, readonly = true }) {
+  const { t }          = useLanguage();
   const [editing,    setEditing]    = useState(false);
   const [blocks,     setBlocks]     = useState(() =>
     session?.exerciseBlocks?.length
@@ -35,7 +37,7 @@ export default function SessionDetailModal({ session, onClose, readonly = true }
       });
       setEditing(false);
     } catch (err) {
-      alert("Error saving: " + err.message);
+      alert(t("error") + ": " + err.message);
     } finally {
       setSaving(false);
     }
@@ -45,14 +47,21 @@ export default function SessionDetailModal({ session, onClose, readonly = true }
 
   const title = `${session.traineeName || session.trainerName || "Session"} — ${session.date}`;
 
+  // Session type badge
+  const isHome = session.sessionType === "home";
+
   return (
     <Modal open={true} onClose={onClose} title={title}>
       <div className="session-detail">
         {/* Meta */}
         <div className="session-detail-meta">
           <span className="sd-time">{fmtTime(session.time)}</span>
+          {isHome
+            ? <span className="session-type-badge home" style={{ marginLeft: "0.5rem" }}>{t("homeBadge")}</span>
+            : <span className="session-type-badge gym"  style={{ marginLeft: "0.5rem" }}>{t("gymBadge")}</span>
+          }
           {session.status === "completed" && (
-            <span className="sc-done-badge" style={{ marginLeft: "0.5rem" }}>✓ Completed</span>
+            <span className="sc-done-badge" style={{ marginLeft: "0.5rem" }}>{t("sessionCompleted")}</span>
           )}
         </div>
 
@@ -71,20 +80,24 @@ export default function SessionDetailModal({ session, onClose, readonly = true }
         {/* Actions */}
         <div className="modal-actions" style={{ marginTop: "1rem" }}>
           {!readonly && !editing && (
-            <button className="btn-secondary" onClick={() => setEditing(true)}>✏ Edit Notes</button>
+            <button className="btn-secondary" onClick={() => setEditing(true)}>{t("editNotes")}</button>
           )}
           {editing && (
             <>
-              <button className="btn-secondary" onClick={() => { setEditing(false); setBlocks(session.exerciseBlocks?.map(b => ({...b, id: b.id || emptyBlock().id})) || []); setNotes(session.notes || ""); }}>
-                Cancel
+              <button className="btn-secondary" onClick={() => {
+                setEditing(false);
+                setBlocks(session.exerciseBlocks?.map(b => ({...b, id: b.id || emptyBlock().id})) || []);
+                setNotes(session.notes || "");
+              }}>
+                {t("cancel")}
               </button>
               <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : "Save Notes"}
+                {saving ? t("saving") : t("saveNotes")}
               </button>
             </>
           )}
           {!editing && (
-            <button className="btn-secondary" onClick={onClose}>Close</button>
+            <button className="btn-secondary" onClick={onClose}>{t("close")}</button>
           )}
         </div>
       </div>

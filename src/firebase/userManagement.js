@@ -1,12 +1,11 @@
 /**
  * userManagement.js
  *
- * Creates and deletes user accounts entirely from the client using the
- * "secondary app" pattern — a second Firebase App instance is used to
- * call createUserWithEmailAndPassword so the current admin/trainer
+ * Creates users via the "secondary app" pattern so the current admin/trainer
  * session is never interrupted.
  *
- * No Cloud Functions required → compatible with the Spark (free) plan.
+ * Deletes users by calling the deployed `deleteUser` Cloud Function which
+ * removes the Firebase Auth account AND all related Firestore data atomically.
  */
 
 import { initializeApp, getApps } from "firebase/app";
@@ -16,11 +15,10 @@ import {
   updateProfile,
   signOut,
 } from "firebase/auth";
-import {
-  doc, setDoc, collection, query, where,
-  getDocs, serverTimestamp, writeBatch,
-} from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "./config";
+import app from "./config";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDy3rNgQM1BKlq_72BHWL9X0D3iu8W0oDg",
@@ -33,8 +31,8 @@ const firebaseConfig = {
 
 function getSecondaryAuth() {
   const existing = getApps().find((a) => a.name === "secondary");
-  const app      = existing ?? initializeApp(firebaseConfig, "secondary");
-  return getAuth(app);
+  const app_     = existing ?? initializeApp(firebaseConfig, "secondary");
+  return getAuth(app_);
 }
 
 /**
@@ -68,7 +66,6 @@ export async function createUserAccount({
     if (role === "trainee") {
       docData.trainerId        = trainerId;
       docData.credits          = typeof credits === "number" ? credits : 0;
-      // Store the password the trainer typed so they can look it up later
       docData.declaredPassword = password;
     }
 
@@ -83,24 +80,14 @@ export async function createUserAccount({
 }
 
 /**
- * deleteUserAccount — removes Firestore doc + all related sessions/progress.
- * Auth account stays (Admin SDK not available on Spark).
+ * deleteUserAccount
+ * Calls the deployed `deleteUser` Cloud Function which:
+ *   1. Deletes the Firebase Auth account
+ *   2. Deletes the Firestore user doc
+ *   3. Deletes all related sessions, progress entries and credit logs
  */
 export async function deleteUserAccount(uid) {
-  const batch = writeBatch(db);
-
-  const [asTrainee, asTrainer, progressEntries, creditLogs] = await Promise.all([
-    getDocs(query(collection(db, "sessions"),        where("traineeId", "==", uid))),
-    getDocs(query(collection(db, "sessions"),        where("trainerId", "==", uid))),
-    getDocs(query(collection(db, "progressEntries"), where("traineeId", "==", uid))),
-    getDocs(query(collection(db, "creditLogs"),      where("traineeId", "==", uid))),
-  ]);
-
-  asTrainee.docs.forEach((d) => batch.delete(d.ref));
-  asTrainer.docs.forEach((d) => batch.delete(d.ref));
-  progressEntries.docs.forEach((d) => batch.delete(d.ref));
-  creditLogs.docs.forEach((d) => batch.delete(d.ref));
-  batch.delete(doc(db, "users", uid));
-
-  await batch.commit();
+  const functions  = getFunctions(app);
+  const deleteUser = httpsCallable(functions, "deleteUser");
+  await deleteUser({ uid });
 }

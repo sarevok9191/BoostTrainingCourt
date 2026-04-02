@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage, LangToggle } from "../contexts/LanguageContext";
 
 export default function Unauthorized() {
   const { logout } = useAuth();
-  const navigate = useNavigate();
+  const { t }      = useLanguage();
+  const navigate   = useNavigate();
 
   async function handleLogout() {
     await logout();
@@ -12,11 +14,12 @@ export default function Unauthorized() {
 
   return (
     <div className="login-wrapper">
+      <LangToggle />
       <div className="login-card">
-        <h2>Access Denied</h2>
-        <p>You don&apos;t have permission to view this page.</p>
+        <h2>{t("accessDenied")}</h2>
+        <p>{t("youDontHavePermission")}</p>
         <button onClick={handleLogout} style={{ marginTop: "1rem" }}>
-          Back to Login
+          {t("backToLogin")}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage, LangToggle } from "../contexts/LanguageContext";
 
 const ROLE_ROUTES = {
   superadmin: "/superadmin/dashboard",
@@ -9,8 +10,9 @@ const ROLE_ROUTES = {
 };
 
 export default function Login() {
-  const { login } = useAuth();
-  const navigate  = useNavigate();
+  const { login }  = useAuth();
+  const { t }      = useLanguage();
+  const navigate   = useNavigate();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +27,7 @@ export default function Login() {
       const role = await login(email, password);
       navigate(ROLE_ROUTES[role] || "/login", { replace: true });
     } catch (err) {
-      setError(err.message || "Failed to sign in.");
+      setError(err.message || t("signInError"));
     } finally {
       setLoading(false);
     }
@@ -33,18 +35,19 @@ export default function Login() {
 
   return (
     <div className="login-wrapper">
+      <LangToggle />
       <div className="login-card">
         <div className="login-logo">
           <div className="logo-mark">BT</div>
         </div>
         <h1 className="login-brand">Boost Training Court</h1>
-        <p className="login-sub">Sign in to your account</p>
+        <p className="login-sub">{t("signInSub")}</p>
 
         {error && <div className="alert-error" style={{ marginBottom: "1rem" }}>{error}</div>}
 
         <form onSubmit={handleSubmit} noValidate className="login-form">
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">{t("email")}</label>
             <input
               id="email"
               type="email"
@@ -56,7 +59,7 @@ export default function Login() {
             />
           </div>
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t("password")}</label>
             <input
               id="password"
               type="password"
@@ -68,7 +71,7 @@ export default function Login() {
             />
           </div>
           <button type="submit" className="btn-login" disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? t("signingIn") : t("signIn")}
           </button>
         </form>
       </div>

@@ -3,28 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage, LangToggle } from "../contexts/LanguageContext";
 import BottomNav from "../components/BottomNav";
 import CalendarView from "../components/CalendarView";
 import SessionDetailModal from "../components/SessionDetailModal";
 import ProgressPanel from "../components/ProgressPanel";
 
+// Tab label keys (translated by BottomNav via useLanguage)
+const TABS = [
+  { key: "home",     label: "home",     icon: "home"     },
+  { key: "schedule", label: "schedule", icon: "schedule" },
+  { key: "history",  label: "history",  icon: "history"  },
+  { key: "more",     label: "more",     icon: "more"     },
+];
+
 // ── Utilities ─────────────────────────────────────────────────────
 function toDateKey(date) {
   return [date.getFullYear(), String(date.getMonth()+1).padStart(2,"0"), String(date.getDate()).padStart(2,"0")].join("-");
-}
-function fmtDay(date) {
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 function fmtTime(t) {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-}
-function fmtFullDate(dateStr) {
-  if (!dateStr) return "";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-  });
 }
 
 function CreditBadge({ credits }) {
@@ -33,16 +33,17 @@ function CreditBadge({ credits }) {
   return <span className={`credit-badge ${cls}`}>{n}</span>;
 }
 
-const TABS = [
-  { key: "home",     label: "Home",     icon: "home"     },
-  { key: "schedule", label: "Schedule", icon: "schedule" },
-  { key: "history",  label: "History",  icon: "history"  },
-  { key: "more",     label: "More",     icon: "more"     },
-];
+function SessionTypeBadge({ type }) {
+  const { t } = useLanguage();
+  if (!type || type === "gym") return <span className="session-type-badge gym">{t("gymBadge")}</span>;
+  return <span className="session-type-badge home">{t("homeBadge")}</span>;
+}
 
 export default function TraineeDashboard() {
   const { currentUser, logout } = useAuth();
-  const navigate = useNavigate();
+  const { t, lang }             = useLanguage();
+  const navigate                = useNavigate();
+  const locale                  = lang === "tr" ? "tr-TR" : "en-US";
 
   const [tab,             setTab]             = useState("home");
   const [userDoc,         setUserDoc]         = useState(null);
@@ -64,13 +65,23 @@ export default function TraineeDashboard() {
     );
   }, [currentUser.uid]);
 
-  // Load trainer name for onboarding empty state (feature 8)
+  // Load trainer name for onboarding empty state
   useEffect(() => {
     if (!userDoc?.trainerId) return;
     getDoc(doc(db, "users", userDoc.trainerId)).then((snap) => {
       if (snap.exists()) setTrainerName(snap.data().displayName || snap.data().email || "");
     });
   }, [userDoc?.trainerId]);
+
+  function fmtDay(date) {
+    return date.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
+  }
+  function fmtFullDate(dateStr) {
+    if (!dateStr) return "";
+    return new Date(dateStr + "T00:00:00").toLocaleDateString(locale, {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+  }
 
   async function handleLogout() { await logout(); navigate("/login", { replace: true }); }
 
@@ -88,31 +99,38 @@ export default function TraineeDashboard() {
 
   return (
     <div className="app-shell">
+      <LangToggle />
       <main className="dash-main">
 
         {/* ══════════ HOME ══════════ */}
         {tab === "home" && (
           <>
             <div className="home-greeting">
-              <div className="greeting-hello">Welcome back,</div>
+              <div className="greeting-hello">{t("welcomeBack")}</div>
               <div className="greeting-name">{displayName}</div>
             </div>
 
-            {/* Feature 8 — onboarding empty state when no sessions */}
             {sessions.length === 0 ? (
               <div className="onboarding-card">
                 <div className="onboarding-icon">🏋️</div>
-                <h2 className="onboarding-title">You&apos;re all set!</h2>
+                <h2 className="onboarding-title">{t("allSet")}</h2>
                 <p className="onboarding-text">
                   {trainerName
-                    ? <>Your trainer <strong>{trainerName}</strong> will schedule your first session soon.</>
-                    : "Your trainer will schedule your first session soon."}
+                    ? <>{t("trainerWillSchedule").replace("{name}", "").trim()
+                        .split(t("trainerWillSchedule").trim())[0]}
+                        <strong>{trainerName}</strong>
+                        {" "}
+                        {t("trainerWillSchedule").includes("{name}")
+                          ? t("trainerWillSchedule").split("{name}")[1]
+                          : ""}
+                      </>
+                    : t("trainerWillSchedule")}
                 </p>
                 <div className="onboarding-credits">
-                  <span className="onboarding-credits-label">Starting Credits</span>
+                  <span className="onboarding-credits-label">{t("startingCreditsLabel")}</span>
                   <CreditBadge credits={credits} />
                 </div>
-                <p className="onboarding-hint">Come back here to see your schedule, session history and progress.</p>
+                <p className="onboarding-hint">{t("comeBackHint")}</p>
               </div>
             ) : (
               <>
@@ -120,7 +138,7 @@ export default function TraineeDashboard() {
                   <span className="credit-card-icon">💳</span>
                   <div className="credit-card-info">
                     <div className="credit-card-value">{credits}</div>
-                    <div className="credit-card-label">Credit Balance</div>
+                    <div className="credit-card-label">{t("creditBalance")}</div>
                   </div>
                   <CreditBadge credits={credits} />
                 </div>
@@ -129,30 +147,30 @@ export default function TraineeDashboard() {
                   <div className="stat-card">
                     <span className="stat-icon">📅</span>
                     <span className="stat-value">{upcoming.length}</span>
-                    <span className="stat-label">Upcoming</span>
+                    <span className="stat-label">{t("upcomingLabel")}</span>
                   </div>
                   <div className="stat-card">
                     <span className="stat-icon">✅</span>
                     <span className="stat-value">{completed.length}</span>
-                    <span className="stat-label">Completed</span>
+                    <span className="stat-label">{t("completedLabel")}</span>
                   </div>
                   <div className="stat-card">
                     <span className="stat-icon">🏋️</span>
                     <span className="stat-value">{sessions.length}</span>
-                    <span className="stat-label">Total</span>
+                    <span className="stat-label">{t("totalLabel")}</span>
                   </div>
                   <div className="stat-card">
                     <span className="stat-icon">⚡</span>
                     <span className="stat-value">
                       {sessions.filter((s) => s.date === todayKey).length}
                     </span>
-                    <span className="stat-label">Today</span>
+                    <span className="stat-label">{t("todayLabel")}</span>
                   </div>
                 </div>
 
                 {upcoming.length > 0 && (
                   <section className="section-card">
-                    <div className="section-header"><h2>Upcoming Sessions</h2></div>
+                    <div className="section-header"><h2>{t("upcomingSessions")}</h2></div>
                     <div className="history-list">
                       {upcoming.slice(0, 3).map((s) => (
                         <SessionListItem
@@ -160,6 +178,7 @@ export default function TraineeDashboard() {
                           session={s}
                           variant="upcoming"
                           onClick={() => setSelectedSession(s)}
+                          fmtFullDate={fmtFullDate}
                         />
                       ))}
                     </div>
@@ -170,7 +189,7 @@ export default function TraineeDashboard() {
           </>
         )}
 
-        {/* ══════════ SCHEDULE (simplified — feature 9) ══════════ */}
+        {/* ══════════ SCHEDULE ══════════ */}
         {tab === "schedule" && (
           <>
             <CalendarView
@@ -180,12 +199,12 @@ export default function TraineeDashboard() {
             />
             <section className="section-card">
               <div className="section-header">
-                <h2>{selectedDay === todayKey ? "Today" : fmtDay(new Date(selectedDay + "T00:00:00"))}</h2>
+                <h2>{selectedDay === todayKey ? t("today") : fmtDay(new Date(selectedDay + "T00:00:00"))}</h2>
               </div>
               {daySession.length === 0 ? (
                 <div className="empty-state" style={{ padding: "1.25rem 0" }}>
                   <span className="empty-icon">📅</span>
-                  <p>No sessions on this day.</p>
+                  <p>{t("noSessionsOnThisDay")}</p>
                 </div>
               ) : (
                 daySession.map((s) => (
@@ -195,9 +214,14 @@ export default function TraineeDashboard() {
                     style={{ cursor: "pointer" }}
                     onClick={() => setSelectedSession(s)}
                   >
-                    <div className="sc-time">{fmtTime(s.time)}</div>
-                    <div className="sc-name">{s.trainerName ? `with ${s.trainerName}` : "Training"}</div>
-                    {s.status === "completed" && <div className="sc-done-badge">✓ Done</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div className="sc-time">{fmtTime(s.time)}</div>
+                      <SessionTypeBadge type={s.sessionType} />
+                    </div>
+                    <div className="sc-name">
+                      {s.trainerName ? `${t("withTrainer")} ${s.trainerName}` : t("training")}
+                    </div>
+                    {s.status === "completed" && <div className="sc-done-badge">{t("sessionCompleted")}</div>}
                     {s.exerciseBlocks?.length > 0 && (
                       <div className="meas-chips" style={{ marginTop: "0.35rem" }}>
                         {s.exerciseBlocks.slice(0, 3).map((b, i) =>
@@ -218,20 +242,22 @@ export default function TraineeDashboard() {
           <>
             {completed.length > 0 && (
               <section className="section-card">
-                <div className="section-header"><h2>Completed Sessions</h2></div>
+                <div className="section-header"><h2>{t("completedSessions")}</h2></div>
                 <div className="history-list">
                   {completed.map((s) => (
-                    <SessionListItem key={s.id} session={s} variant="completed" onClick={() => setSelectedSession(s)} />
+                    <SessionListItem key={s.id} session={s} variant="completed"
+                      onClick={() => setSelectedSession(s)} fmtFullDate={fmtFullDate} />
                   ))}
                 </div>
               </section>
             )}
             {past.length > 0 && (
               <section className="section-card">
-                <div className="section-header"><h2>Past Sessions</h2></div>
+                <div className="section-header"><h2>{t("pastSessions")}</h2></div>
                 <div className="history-list">
                   {past.map((s) => (
-                    <SessionListItem key={s.id} session={s} onClick={() => setSelectedSession(s)} />
+                    <SessionListItem key={s.id} session={s}
+                      onClick={() => setSelectedSession(s)} fmtFullDate={fmtFullDate} />
                   ))}
                 </div>
               </section>
@@ -240,14 +266,14 @@ export default function TraineeDashboard() {
               <section className="section-card">
                 <div className="empty-state">
                   <span className="empty-icon">📋</span>
-                  <p>No session history yet.</p>
+                  <p>{t("noSessionHistoryYet")}</p>
                 </div>
               </section>
             )}
           </>
         )}
 
-        {/* ══════════ PROGRESS ══════════ */}
+        {/* ══════════ MORE ══════════ */}
         {tab === "more" && (
           <>
             <div className="more-profile">
@@ -257,13 +283,12 @@ export default function TraineeDashboard() {
               <div>
                 <div className="more-name">{userDoc?.displayName || currentUser?.email}</div>
                 <div className="more-email">{currentUser?.email}</div>
-                <div className="more-role"><span className="role-badge badge-trainee">Trainee</span></div>
+                <div className="more-role"><span className="role-badge badge-trainee">{t("traineeRole")}</span></div>
               </div>
             </div>
 
-            {/* Progress section for trainee */}
             <section className="section-card" style={{ marginBottom: "0.75rem" }}>
-              <div className="section-header"><h2>My Progress</h2></div>
+              <div className="section-header"><h2>{t("myProgress")}</h2></div>
               <ProgressPanel
                 traineeId={currentUser.uid}
                 trainerId={userDoc?.trainerId || ""}
@@ -279,7 +304,7 @@ export default function TraineeDashboard() {
                   <polyline points="16 17 21 12 16 7"/>
                   <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
-                Sign Out
+                {t("signOut")}
               </button>
             </div>
           </>
@@ -288,7 +313,6 @@ export default function TraineeDashboard() {
 
       <BottomNav tabs={TABS} activeTab={tab} onTabChange={setTab} />
 
-      {/* Session detail modal — read-only for trainee (feature 6) */}
       {selectedSession && (
         <SessionDetailModal
           session={selectedSession}
@@ -300,7 +324,8 @@ export default function TraineeDashboard() {
   );
 }
 
-function SessionListItem({ session: s, variant, onClick }) {
+function SessionListItem({ session: s, variant, onClick, fmtFullDate }) {
+  const { t } = useLanguage();
   return (
     <div
       className={`history-item${variant === "upcoming" ? " upcoming" : ""}${variant === "completed" ? " done" : ""}`}
@@ -310,8 +335,11 @@ function SessionListItem({ session: s, variant, onClick }) {
       <div className="history-left">
         <div className="history-date">{fmtFullDate(s.date)}</div>
         <div className="history-time">{fmtTime(s.time)}</div>
-        {s.trainerName && <div className="history-trainer">Trainer: {s.trainerName}</div>}
-        {variant === "completed" && <span className="history-done-badge">✓ Done</span>}
+        <SessionTypeBadge type={s.sessionType} />
+        {s.trainerName && (
+          <div className="history-trainer">{t("trainer")}: {s.trainerName}</div>
+        )}
+        {variant === "completed" && <span className="history-done-badge">{t("done")}</span>}
       </div>
       <div className="history-right">
         {s.exerciseBlocks?.length > 0 ? (
@@ -324,7 +352,7 @@ function SessionListItem({ session: s, variant, onClick }) {
         ) : s.notes ? (
           <p className="history-notes">{s.notes.slice(0, 60)}{s.notes.length > 60 ? "…" : ""}</p>
         ) : (
-          <p className="history-notes empty">Tap to view session</p>
+          <p className="history-notes empty">{t("tapToView")}</p>
         )}
       </div>
     </div>
