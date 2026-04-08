@@ -10,7 +10,7 @@ import { auth, db, getMessagingInstance } from "../firebase/config";
 
 // VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push Certificates
 // Set VITE_FIREBASE_VAPID_KEY in your .env file.
-const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "";
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || " BJDzOzAl61KOUFgl7WHVF4A8dowxaVYZTSxwXYvCjff2j5OQ9IbdpS2uGoRiEtYcI3fP3tOhsFvNatCKDwJ0WQI ";
 
 const AuthContext = createContext(null);
 
