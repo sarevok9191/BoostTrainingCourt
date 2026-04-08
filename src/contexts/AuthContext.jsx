@@ -33,6 +33,18 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   }
 
+  // NEW: Explicitly request permission and save token triggered by user action
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) return false;
+    
+    const permission = await Notification.requestPermission();
+    if (permission === "granted" && currentUser) {
+      await saveFcmToken(currentUser.uid, true); // Pass true to bypass the "granted" check since we just granted it
+      return true;
+    }
+    return false;
+  }
+
   // ── Listen for auth state changes ────────────────────────────────
   // saveFcmToken is called here so it runs on every app load / token
   // refresh, not only on explicit sign-in.
@@ -70,7 +82,14 @@ export function AuthProvider({ children }) {
     return () => cleanup();
   }, []);
 
-  const value = { currentUser, userRole, login, logout, loading };
+  const value = { 
+    currentUser, 
+    userRole, 
+    login, 
+    logout, 
+    loading,
+    requestNotificationPermission // Export the new function
+  };
 
   return (
     <AuthContext.Provider value={value}>
@@ -84,13 +103,13 @@ export function useAuth() {
 }
 
 // ── Helper: request notification permission + store FCM token ────
-async function saveFcmToken(uid) {
+async function saveFcmToken(uid, forceRequest = false) {
   if (!VAPID_KEY) return; 
   if (!('Notification' in window)) return;
 
   // IMPORTANT: Only auto-sync the token if permission is ALREADY granted.
-  // If it's not granted, don't ask here. Wait for the user to click a button.
-  if (Notification.permission !== "granted") return;
+  // If we just clicked the button (forceRequest), bypass this check.
+  if (!forceRequest && Notification.permission !== "granted") return;
 
   const messaging = await getMessagingInstance();
   if (!messaging) return;

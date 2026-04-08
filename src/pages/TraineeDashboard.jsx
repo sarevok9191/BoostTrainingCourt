@@ -40,7 +40,8 @@ function SessionTypeBadge({ type }) {
 }
 
 export default function TraineeDashboard() {
-  const { currentUser, logout } = useAuth();
+  // NEW: Destructure requestNotificationPermission from useAuth
+  const { currentUser, logout, requestNotificationPermission } = useAuth();
   const { t, lang }             = useLanguage();
   const navigate                = useNavigate();
   const locale                  = lang === "tr" ? "tr-TR" : "en-US";
@@ -84,6 +85,16 @@ export default function TraineeDashboard() {
   }
 
   async function handleLogout() { await logout(); navigate("/login", { replace: true }); }
+
+  // NEW: Handler for enabling notifications
+  async function handleEnableNotifications() {
+    const success = await requestNotificationPermission();
+    if (success) {
+      alert(t("notificationsEnabled") || "Push notifications enabled successfully!");
+    } else {
+      alert(t("notificationsDenied") || "Notification permission denied or unavailable.");
+    }
+  }
 
   const todayKey   = toDateKey(new Date());
   const daySession = sessions.filter((s) => s.date === selectedDay).sort((a, b) => a.time.localeCompare(b.time));
@@ -298,6 +309,17 @@ export default function TraineeDashboard() {
             </section>
 
             <div className="more-actions">
+              {/* NEW: Enable Notifications Button */}
+              {(!('Notification' in window) || Notification.permission !== 'granted') && (
+                <button className="more-action-btn" onClick={handleEnableNotifications} style={{ marginBottom: '1rem', color: '#10b981' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                  </svg>
+                  {t("enableNotifications") || "Enable Push Notifications"}
+                </button>
+              )}
+
               <button className="more-action-btn danger" onClick={handleLogout}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
