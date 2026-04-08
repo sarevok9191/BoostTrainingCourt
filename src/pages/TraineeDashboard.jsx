@@ -40,7 +40,6 @@ function SessionTypeBadge({ type }) {
 }
 
 export default function TraineeDashboard() {
-  // NEW: Destructure requestNotificationPermission from useAuth
   const { currentUser, logout, requestNotificationPermission } = useAuth();
   const { t, lang }             = useLanguage();
   const navigate                = useNavigate();
@@ -86,7 +85,6 @@ export default function TraineeDashboard() {
 
   async function handleLogout() { await logout(); navigate("/login", { replace: true }); }
 
-  // NEW: Handler for enabling notifications
   async function handleEnableNotifications() {
     const success = await requestNotificationPermission();
     if (success) {
@@ -309,8 +307,8 @@ export default function TraineeDashboard() {
             </section>
 
             <div className="more-actions">
-              {/* NEW: Enable Notifications Button */}
-              {(!('Notification' in window) || Notification.permission !== 'granted') && (
+              {/* This button now checks if the database is missing the token */}
+              {!userDoc?.fcmToken && (
                 <button className="more-action-btn" onClick={handleEnableNotifications} style={{ marginBottom: '1rem', color: '#10b981' }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
