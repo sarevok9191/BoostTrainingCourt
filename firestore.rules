@@ -29,17 +29,24 @@ service cloud.firestore {
         uid() == userId
         || isSuperAdmin()
         || (isTrainer()
-            && request.resource.data.role     == "trainee"
+            && request.resource.data.role      == "trainee"
             && request.resource.data.trainerId == uid())
       );
 
-      // Superadmin can change anything; trainer can only touch certain trainee fields
+      // ── THIS IS THE UPDATED RULE ─────────────────────────────────
+      // Superadmin can change anything; trainer can only touch certain trainee fields;
+      // Users (trainees) can update their own fcmToken.
       allow update: if isSuperAdmin()
         || (isTrainer()
             && resource.data.trainerId == uid()
             && request.resource.data.diff(resource.data)
                  .affectedKeys()
-                 .hasOnly(['credits', 'declaredPassword', 'fcmToken']));
+                 .hasOnly(['credits', 'declaredPassword', 'fcmToken']))
+        || (uid() == userId 
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly(['fcmToken']));
+      // ─────────────────────────────────────────────────────────────
 
       // Superadmin or trainer deletes their own trainee
       allow delete: if isSuperAdmin()
