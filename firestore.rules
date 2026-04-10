@@ -17,14 +17,14 @@ service cloud.firestore {
 
     // ── /users/{uid} ──────────────────────────────────────────────
     match /users/{userId} {
-      // Trainees read only themselves; trainers + superadmin read all
+      // NEW FIX: Anyone logged in can read a trainer's profile to get their name
       allow read: if isSignedIn() && (
         isSuperAdmin()
         || isTrainer()
         || uid() == userId
+        || resource.data.role == "trainer" 
       );
 
-      // Self-registration (seed) OR superadmin OR trainer creating their trainee
       allow create: if isSignedIn() && (
         uid() == userId
         || isSuperAdmin()
@@ -33,9 +33,7 @@ service cloud.firestore {
             && request.resource.data.trainerId == uid())
       );
 
-      // ── THIS IS THE UPDATED RULE ─────────────────────────────────
-      // Superadmin can change anything; trainer can only touch certain trainee fields;
-      // Users (trainees) can update their own fcmToken.
+      // Trainees can update their own fcmToken
       allow update: if isSuperAdmin()
         || (isTrainer()
             && resource.data.trainerId == uid()
@@ -46,9 +44,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data)
                  .affectedKeys()
                  .hasOnly(['fcmToken']));
-      // ─────────────────────────────────────────────────────────────
 
-      // Superadmin or trainer deletes their own trainee
       allow delete: if isSuperAdmin()
         || (isTrainer()
             && resource.data.role      == "trainee"
@@ -62,88 +58,31 @@ service cloud.firestore {
         || isTrainer()
         || (isTrainee() && resource.data.traineeId == uid())
       );
-
-      allow create: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && request.resource.data.trainerId == uid())
-      );
-
-      allow update: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-      );
-
-      allow delete: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-      );
+      allow create: if isSignedIn() && (isSuperAdmin() || (isTrainer() && request.resource.data.trainerId == uid()));
+      allow update: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()));
+      allow delete: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()));
     }
 
     // ── /creditLogs/{logId} ───────────────────────────────────────
-    // Immutable log of every credit top-up
     match /creditLogs/{logId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-        || (isTrainee() && resource.data.traineeId == uid())
-      );
-      // Trainers and superadmins can write logs; never update/delete
+      allow read: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()) || (isTrainee() && resource.data.traineeId == uid()));
       allow create: if isSignedIn() && (isSuperAdmin() || isTrainer());
       allow update, delete: if false;
     }
 
     // ── /progressEntries/{entryId} ────────────────────────────────
-    // Weight, measurements, custom values, personal notes
     match /progressEntries/{entryId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-        || (isTrainee() && resource.data.traineeId == uid())
-      );
-
-      // Trainer writes weight / measurements / custom
-      // Trainee writes their own personal_note
-      allow create: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && request.resource.data.trainerId == uid())
-        || (isTrainee()
-            && request.resource.data.traineeId == uid()
-            && request.resource.data.type == "personal_note")
-      );
-
-      allow update: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-        || (isTrainee()
-            && resource.data.traineeId == uid()
-            && resource.data.type == "personal_note")
-      );
-
-      allow delete: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-        || (isTrainee()
-            && resource.data.traineeId == uid()
-            && resource.data.type == "personal_note")
-      );
+      allow read: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()) || (isTrainee() && resource.data.traineeId == uid()));
+      allow create: if isSignedIn() && (isSuperAdmin() || (isTrainer() && request.resource.data.trainerId == uid()) || (isTrainee() && request.resource.data.traineeId == uid() && request.resource.data.type == "personal_note"));
+      allow update: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()) || (isTrainee() && resource.data.traineeId == uid() && resource.data.type == "personal_note"));
+      allow delete: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()) || (isTrainee() && resource.data.traineeId == uid() && resource.data.type == "personal_note"));
     }
 
     // ── /progressMetrics/{metricId} ───────────────────────────────
-    // Trainer-defined custom metric definitions
     match /progressMetrics/{metricId} {
-      allow read: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid())
-        || (isTrainee() && resource.data.traineeId == uid())
-      );
-
-      allow create, update: if isSignedIn() && (
-        isSuperAdmin()
-        || (isTrainer() && request.resource.data.trainerId == uid())
-      );
-
-      allow delete: if isSuperAdmin()
-        || (isTrainer() && resource.data.trainerId == uid());
+      allow read: if isSignedIn() && (isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid()) || (isTrainee() && resource.data.traineeId == uid()));
+      allow create, update: if isSignedIn() && (isSuperAdmin() || (isTrainer() && request.resource.data.trainerId == uid()));
+      allow delete: if isSuperAdmin() || (isTrainer() && resource.data.trainerId == uid());
     }
 
     // ── /audit_logs ───────────────────────────────────────────────
