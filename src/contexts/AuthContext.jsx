@@ -8,8 +8,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { getToken, onMessage } from "firebase/messaging";
 import { auth, db, getMessagingInstance } from "../firebase/config";
 
-// VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push Certificates
-// Set VITE_FIREBASE_VAPID_KEY in your .env file.
+// VAPID key from Firebase Console
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BJDzOzAl61KOUFgl7WHVF4A8dowxaVYZTSxwXYvCjff2j5OQ9IbdpS2uGoRiEtYcI3fP3tOhsFvNatCKDwJ0WQI";
 
 const AuthContext = createContext(null);
@@ -33,28 +32,34 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   }
 
-  // NEW: Explicitly request permission and save token triggered by user action
+  // NEW: This function MUST be here so the dashboard can trigger the browser prompt
   async function requestNotificationPermission() {
-    if (!('Notification' in window)) return false;
-    
-    const permission = await Notification.requestPermission();
-    if (permission === "granted" && currentUser) {
-      await saveFcmToken(currentUser.uid, true); // Pass true to bypass the "granted" check since we just granted it
-      return true;
+    if (!('Notification' in window)) {
+      console.error("This browser does not support notifications.");
+      return false;
     }
-    return false;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted" && currentUser) {
+        // Bypass the early return check because we just got permission
+        await saveFcmToken(currentUser.uid, true); 
+        return true;
+      }
+      console.warn("Notification permission not granted. Status:", permission);
+      return false;
+    } catch (err) {
+      console.error("Error requesting permission:", err);
+      return false;
+    }
   }
 
-  // ── Listen for auth state changes ────────────────────────────────
-  // saveFcmToken is called here so it runs on every app load / token
-  // refresh, not only on explicit sign-in.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
         setUserRole(snap.exists() ? snap.data().role : null);
         setCurrentUser(user);
-        // Refresh FCM token on every login / page load (non-blocking)
+        // Silently try to refresh token on load
         saveFcmToken(user.uid).catch(() => {});
       } else {
         setCurrentUser(null);
@@ -65,7 +70,6 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // ── Listen for foreground FCM messages ───────────────────────────
   useEffect(() => {
     let cleanup = () => {};
     getMessagingInstance().then((messaging) => {
@@ -82,14 +86,8 @@ export function AuthProvider({ children }) {
     return () => cleanup();
   }, []);
 
-  const value = { 
-    currentUser, 
-    userRole, 
-    login, 
-    logout, 
-    loading,
-    requestNotificationPermission // Export the new function
-  };
+  // Export the new permission function so TraineeDashboard can use it
+  const value = { currentUser, userRole, login, logout, loading, requestNotificationPermission };
 
   return (
     <AuthContext.Provider value={value}>
@@ -104,18 +102,40 @@ export function useAuth() {
 
 // ── Helper: request notification permission + store FCM token ────
 async function saveFcmToken(uid, forceRequest = false) {
-  if (!VAPID_KEY) return; 
-  if (!('Notification' in window)) return;
+  console.log("FCM Setup: Starting token fetch process...");
+  try {
+    if (!VAPID_KEY) throw new Error("VAPID_KEY is missing.");
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      throw new Error("Push notifications/Service Workers not supported (Are you using an insecure 192.168 IP address?).");
+    }
 
-  // IMPORTANT: Only auto-sync the token if permission is ALREADY granted.
-  // If we just clicked the button (forceRequest), bypass this check.
-  if (!forceRequest && Notification.permission !== "granted") return;
+    if (!forceRequest && Notification.permission !== "granted") {
+      console.log("FCM Setup: Permission not granted yet, waiting for explicit user prompt.");
+      return;
+    }
 
-  const messaging = await getMessagingInstance();
-  if (!messaging) return;
+    const messaging = await getMessagingInstance();
+    if (!messaging) throw new Error("FCM Setup: getMessagingInstance returned null.");
 
-  const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-  if (!token) return;
+    // EXPLICIT FIX: Manually register the service worker for Vite compatibility
+    console.log("FCM Setup: Registering Service Worker...");
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    console.log("FCM Setup: Service Worker registered!");
 
-  await updateDoc(doc(db, "users", uid), { fcmToken: token });
+    console.log("FCM Setup: Requesting token from Firebase...");
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration
+    });
+
+    if (!token) throw new Error("FCM Setup: Firebase returned an empty token.");
+    console.log("FCM Setup: Token successfully retrieved!");
+
+    console.log("FCM Setup: Saving token to Firestore database...");
+    await updateDoc(doc(db, "users", uid), { fcmToken: token });
+    console.log("FCM Setup: Token successfully saved to database! Everything is working.");
+
+  } catch (error) {
+    console.error("FCM Setup Error:", error.message || error);
+  }
 }
